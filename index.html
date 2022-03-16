@@ -1,13 +1,18 @@
 <!DOCTYPE html>
-<html>
+<html style="background-color: black;">
+  <link rel="stylesheet" href="styles.css">
   <div id="drop_zone" ondrop="dropHandler(event);" ondragover="dragOverHandler(event);">
-    <canvas id="canvas" width=256 height=240 style="border:1px solid #000000;"></canvas>
+    <p>s</p>s<p>
+    <canvas id="canvas"></canvas>
+    <p style="text-align: center; color:yellow">Drag and drop an NES rom!</p>
   </div>
 
   <script> 
   const initCanvas = () => {
     let canvas = document.getElementById('canvas');
     let context = canvas.getContext('2d');
+    canvas.width = 256;
+    canvas.height = 240;
     context.fillStyle = 'green';
     return [canvas, context];
   }
@@ -39,12 +44,15 @@
     console.log(romBuf[0] + " " + romBuf[1] + " " + romBuf[2] + " " + romBuf[3]);
 
     // initialize nes with rom
-    let x = wasm_init_nes(nesPtr, romPtr);
-    console.log("Cartridge load return: " + x);
+    let err = wasm_init_nes(nesPtr, romPtr);
+    console.log("Cartridge load return: " + err);
+    wasm_free(romPtr);
+    if (err > 0) {
+      wasm_free(nesPtr);
+      return { ptr: 0 }
+    }
 
     // free rom
-    wasm_free(romPtr);
-
     return { ptr: nesPtr };
   }
 
@@ -139,7 +147,7 @@
         update_nes(nes.ptr, input.input1, screen.ptr);
 
         // update the screen
-        let image = context.createImageData(256, 240);
+        let image = new ImageData(256, 240, {});
         let screenBuf = new Uint8Array(memory.buffer, screen.ptr, 240 * 256 * 3);
         for (let i = 0, j = 0; i < 240 * 256 * 4; i += 4, j += 3) {
           image.data[i + 0] = screenBuf[j + 0]; // r 
@@ -147,28 +155,12 @@
           image.data[i + 2] = screenBuf[j + 2]; // b
           image.data[i + 3] = 255; // a 
         }
+
         context.putImageData(image, 0, 0);
+        //context.drawImage(canvas, 0, 0);
       });
       await new Promise(r => setTimeout(r, 17));
     }
-
-    /*while (true) {
-      console.log(nesPtr);
-    }*/
-
-
-    /*let emu = await initWasm();
-    let rom = await fetch('smb.nes')
-      .then(message => message.body.getReader().read())
-      .then(result => result.value);
-    let [nes_ptr, screen_pixels_ptr] = await createNes(emu, rom);
-    
-    while (true) {
-      window.requestAnimationFrame(() => update(emu, nes_ptr, screen_pixels_ptr, context));
-      await new Promise(r => setTimeout(r, 17));
-    }*/
-    
-    //update(emu, nes_ptr, screen_pixels_ptr, context);
   }
 
   main();
