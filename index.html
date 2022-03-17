@@ -138,7 +138,10 @@
     let screen = initScreen(emu); 
 
     //
-    let rom = await fetch("alter_ego.nes").then((r => r.body.getReader())).then(r => r.read()).then(r => r.value);
+    let ae = await fetch("alter_ego.nes");
+    let ae_reader = await ae.body.getReader();
+    let data = await ae_reader.read();
+    let rom = data.value;
     initNes(emu, nes, rom);
     
     // start update loop
