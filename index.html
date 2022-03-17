@@ -8,6 +8,162 @@
   </div>
 
   <script> 
-const initCanvas=()=>{let t=document.getElementById("canvas"),e=t.getContext("2d");return t.width=256,t.height=240,e.fillStyle="green",[t,e]},initEmu=async()=>{let t=fetch("emu.wasm");return await WebAssembly.instantiateStreaming(t,{env:{js_grow:t=>0,js_assert:()=>{console.log("Assert")}}})},createNes=(t,e)=>{let{wasm_malloc:n,wasm_free:a,wasm_init_nes:r,sizeof_Nes:s,memory:i}=t.instance.exports,o=n(s),u=n(e.length),l=new Uint8Array(i.buffer,u,e.length);for(let t=0;t<e.length;t++)l[t]=e[t];console.log("Creating ROM with size: "+l.length),console.log(l[0]+" "+l[1]+" "+l[2]+" "+l[3]);let p=r(o,u);return console.log("Cartridge load return: "+p),a(u),p>0?(a(o),{ptr:0}):{ptr:o}},buttons={A:1,B:2,SELECT:4,START:8,UP:16,DOWN:32,LEFT:64,RIGHT:128};let dropHandler=t=>{};const dragOverHandler=t=>{t.preventDefault()},initDropHandler=t=>{let e={ptr:0};return dropHandler=(async n=>{n.preventDefault();let a=new Uint8Array(await new Promise((t,e)=>{let a=new FileReader;a.onload=(e=>t(a.result)),a.readAsArrayBuffer(n.dataTransfer.files[0])}));e.ptr=createNes(t,a).ptr}),e},initInput=()=>{let t={input1:0,input2:0};return window.addEventListener("keydown",e=>{switch(e.keyCode){case 13:t.input1|=buttons.START;break;case 16:t.input1|=buttons.SELECT;break;case 90:t.input1|=buttons.A;break;case 88:t.input1|=buttons.B;break;case 37:t.input1|=buttons.LEFT;break;case 38:t.input1|=buttons.UP;break;case 39:t.input1|=buttons.RIGHT;break;case 40:t.input1|=buttons.DOWN}},!0),window.addEventListener("keyup",e=>{switch(e.keyCode){case 13:t.input1&=~buttons.START;break;case 16:t.input1&=~buttons.SELECT;break;case 90:t.input1&=~buttons.A;break;case 88:t.input1&=~buttons.B;break;case 37:t.input1&=~buttons.LEFT;break;case 38:t.input1&=~buttons.UP;break;case 39:t.input1&=~buttons.RIGHT;break;case 40:t.input1&=~buttons.DOWN}},!0),t},initScreen=t=>{let{wasm_malloc:e}=t.instance.exports;return{ptr:e(184320)}},main=async()=>{let t=await initEmu(),[e,n]=initCanvas(),a=initInput(),r=initDropHandler(t);for(;0==r.ptr;)await new Promise(t=>setTimeout(t,100));let s=initScreen(t);for(;;)window.requestAnimationFrame(()=>{let{update_nes:e,memory:i}=t.instance.exports;e(r.ptr,a.input1,s.ptr);let o=new ImageData(256,240,{}),u=new Uint8Array(i.buffer,s.ptr,184320);for(let t=0,e=0;t<245760;t+=4,e+=3)o.data[t+0]=u[e+0],o.data[t+1]=u[e+1],o.data[t+2]=u[e+2],o.data[t+3]=255;n.putImageData(o,0,0)}),await new Promise(t=>setTimeout(t,17))};main();
+  const initCanvas = () => {
+    let canvas = document.getElementById('canvas');
+    let context = canvas.getContext('2d');
+    canvas.width = 256;
+    canvas.height = 240;
+    context.fillStyle = 'green';
+    return [canvas, context];
+  }
+
+  const initEmu = async () => {
+    let emu_wasm = fetch('emu.wasm');
+    let emu = await WebAssembly.instantiateStreaming(emu_wasm, { 
+      "env": { 
+        "js_grow": new_n => { return 0 },
+        "js_assert": () => { console.log("Assert"); },
+      } 
+    });
+    return emu;
+  }
+
+  const createNes = (emu, rom) => {
+    let { wasm_malloc, wasm_free, wasm_init_nes, sizeof_Nes, memory } = emu.instance.exports;
+
+    // allocate space for an NES
+    let nesPtr = wasm_malloc(sizeof_Nes);
+
+    // allocate space for the rom and upload it
+    let romPtr = wasm_malloc(rom.length);
+    let romBuf = new Uint8Array(memory.buffer, romPtr, rom.length);
+    for (let i = 0; i < rom.length; i++) {
+      romBuf[i] = rom[i];
+    }
+    console.log("Creating ROM with size: " + romBuf.length)
+    console.log(romBuf[0] + " " + romBuf[1] + " " + romBuf[2] + " " + romBuf[3]);
+
+    // initialize nes with rom
+    let err = wasm_init_nes(nesPtr, romPtr);
+    console.log("Cartridge load return: " + err);
+    wasm_free(romPtr);
+    if (err > 0) {
+      wasm_free(nesPtr);
+      return { ptr: 0 }
+    }
+
+    // free rom
+    return { ptr: nesPtr };
+  }
+
+  const buttons = {
+    A:      0b00000001,
+    B:      0b00000010,
+    SELECT: 0b00000100,
+    START:  0b00001000,
+    UP:     0b00010000,
+    DOWN:   0b00100000,
+    LEFT:   0b01000000,
+    RIGHT:  0b10000000,
+  }
+
+  let dropHandler = (ev) => { }
+  const dragOverHandler = (ev) => { ev.preventDefault(); }
+
+  const initDropHandler = (emu) => {
+    let nes = { ptr: 0 }
+
+    dropHandler = async (ev) => {
+      ev.preventDefault();
+
+      let rom = new Uint8Array(await new Promise((resolve, reject) => {
+        let reader = new FileReader();
+        reader.onload = (e) => resolve(reader.result);
+        reader.readAsArrayBuffer(ev.dataTransfer.files[0]);
+      }));
+
+      nes.ptr = createNes(emu, rom).ptr;
+    }
+
+    return nes;
+  }
+
+  const initInput = () => {
+    let input = { input1: 0, input2: 0 }
+
+    const keydown = e => { switch (e.keyCode) {
+      case 13: input.input1 |= buttons.START; break;
+      case 16: input.input1 |= buttons.SELECT; break;
+      case 90: input.input1 |= buttons.A; break;
+      case 88: input.input1 |= buttons.B; break;
+  
+      case 37: input.input1 |= buttons.LEFT; break;
+      case 38: input.input1 |= buttons.UP; break;
+      case 39: input.input1 |= buttons.RIGHT; break;
+      case 40: input.input1 |= buttons.DOWN; break;
+    }}
+
+    const keyup = e => { switch (e.keyCode) {
+      case 13: input.input1 &= ~buttons.START; break;
+      case 16: input.input1 &= ~buttons.SELECT; break;
+      case 90: input.input1 &= ~buttons.A; break;
+      case 88: input.input1 &= ~buttons.B; break;
+  
+      case 37: input.input1 &= ~buttons.LEFT; break;
+      case 38: input.input1 &= ~buttons.UP; break;
+      case 39: input.input1 &= ~buttons.RIGHT; break;
+      case 40: input.input1 &= ~buttons.DOWN; break;
+    }}
+
+    window.addEventListener('keydown', keydown, true);
+    window.addEventListener('keyup', keyup, true);
+
+    return input;
+  }
+
+  const initScreen = (emu) => {
+    let { wasm_malloc } = emu.instance.exports;
+    return { ptr: wasm_malloc(256 * 240 * 3) };
+  }
+
+  const main = async () => {
+    let emu = await initEmu();
+    let [canvas, context] = initCanvas();
+    let input = initInput();
+    let nes = initDropHandler(emu);
+
+    while (nes.ptr == 0) { 
+      await new Promise(r => setTimeout(r, 100)); 
+    };
+    let screen = initScreen(emu); 
+    
+    // start update loop
+    let brk = false;
+    while (!brk) {
+      window.requestAnimationFrame(() => {
+        let { update_nes, memory } = emu.instance.exports;
+
+        // update 1 frame of the nes
+        update_nes(nes.ptr, input.input1, screen.ptr);
+
+        // update the screen
+        let image = new ImageData(256, 240, {});
+        let screenBuf = new Uint8Array(memory.buffer, screen.ptr, 240 * 256 * 3);
+        for (let i = 0, j = 0; i < 240 * 256 * 4; i += 4, j += 3) {
+          image.data[i + 0] = screenBuf[j + 0]; // r 
+          image.data[i + 1] = screenBuf[j + 1]; // g
+          image.data[i + 2] = screenBuf[j + 2]; // b
+          image.data[i + 3] = 255; // a 
+        }
+
+        context.putImageData(image, 0, 0);
+        //context.drawImage(canvas, 0, 0);
+      });
+      await new Promise(r => setTimeout(r, 17));
+    }
+  }
+
+  main();
+
   </script>
 </html>
