@@ -142,6 +142,9 @@
     let ae_reader = await ae.body.getReader();
     let data = await ae_reader.read();
     let rom = data.value;
+    console.log(ae);
+    console.log(ae_reader);
+    console.log(data);
     initNes(emu, nes, rom);
     
     // start update loop
